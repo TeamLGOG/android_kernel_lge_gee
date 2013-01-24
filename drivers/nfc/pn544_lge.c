@@ -160,9 +160,8 @@ static void pn544_disable_irq(struct pn544_dev *pn544_dev)
 
 	spin_lock_irqsave(&pn544_dev->irq_enabled_lock, flags);
 	if (pn544_dev->irq_enabled) {
-//		disable_irq_nosync(pn544_dev->client->irq);
-		disable_irq_nosync(OMAP_GPIO_IRQ(pn544_dev->irq_gpio));
-//		disable_irq_nosync(pn544_dev->irq_gpio);
+		disable_irq_nosync(pn544_dev->client->irq);
+		disable_irq_nosync(pn544_dev->irq_gpio);
 		pn544_dev->irq_enabled = false;
 	}
 	spin_unlock_irqrestore(&pn544_dev->irq_enabled_lock, flags);
