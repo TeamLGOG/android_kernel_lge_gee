@@ -1,5 +1,6 @@
-/*
- * Copyright (C) 2010 Trusted Logic S.A.
+/* lge/include/nfc_nxp_pn544pn65n.h
+ *
+ * Copyright (C) 2010 NXP Semiconductors
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -8,30 +9,24 @@
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+ *
  */
 
-#define PN544_MAGIC  0xE9
-
+#define PN544_MAGIC	0xE9
 #ifdef CONFIG_LGE_NFC_PN544
-/*
-#define PN544_DRV_NAME		CONFIG_LGE_NFC_DEV_NAME
-#define NFC_GPIO_VEN		CONFIG_LGE_NFC_GPIO_VEN
-#define NFC_GPIO_IRQ		CONFIG_LGE_NFC_GPIO_IRQ
-#define NFC_GPIO_FIRM		CONFIG_LGE_NFC_GPIO_MODE
-#define NFC_I2C_SLAVEADDR	CONFIG_LGE_NFC_GPIO_I2C
-*/
 #define PN544_DRV_NAME		"pn544"
-#define NFC_GPIO_VEN		62
-#define NFC_GPIO_IRQ		4
-#define NFC_GPIO_FIRM		42
-#define NFC_I2C_SLAVE_ADDR	0x28
+#define NFC_GPIO_VEN		55	
+#define NFC_GPIO_IRQ		29
+#define NFC_GPIO_FIRM		37
+#define NFC_I2C_SLAVE_ADDR		0x28
 #endif
+
 
 /*
  * PN544 power control via ioctl
