@@ -617,8 +617,8 @@ struct pm8921_bms_battery_data lge_2100_mako_data =  {
 };
 
 static unsigned int keymap[] = {
-	KEY(0, 0, KEY_VOLUMEDOWN),
-	KEY(0, 1, KEY_VOLUMEUP),
+	KEY(0, 1, KEY_VOLUMEDOWN),
+	KEY(0, 0, KEY_VOLUMEUP),
 };
 
 static struct matrix_keymap_data keymap_data = {
@@ -626,12 +626,6 @@ static struct matrix_keymap_data keymap_data = {
 	.keymap         = keymap,
 };
 
-static __init void mako_fixed_keymap(void) {
-	if (lge_get_board_revno() < HW_REV_C) {
-		keymap[0] = KEY(0, 0, KEY_VOLUMEUP);
-		keymap[1] = KEY(0, 1, KEY_VOLUMEDOWN);
-	}
-}
 
 static struct pm8xxx_keypad_platform_data keypad_data = {
 	.input_name             = "keypad_8064",
@@ -819,7 +813,6 @@ void __init apq8064_init_pmic(void)
 {
 	pmic_reset_irq = PM8921_IRQ_BASE + PM8921_RESOUT_IRQ;
 
-	mako_fixed_keymap();
 	mako_set_adcmap();
 	mako_fixed_leds();
 	mako_fixup_wlc_gpio();
