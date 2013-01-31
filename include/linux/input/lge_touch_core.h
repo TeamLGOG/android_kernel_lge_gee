@@ -57,9 +57,15 @@ struct touch_operation_role {
 	int             jitter_filter_enable;	/* enable = 1, disable = 0 */
 	int             jitter_curr_ratio;
 	int             accuracy_filter_enable;	/* enable = 1, disable = 0 */
+    int		ghost_finger_solution_enable;
 	unsigned long	irqflags;
-	int             show_touches;
-	int             pointer_location;
+#if defined(CONFIG_TOUCH_REG_MAP_TM2000) || defined(CONFIG_TOUCH_REG_MAP_TM2372)
+	int		show_touches;
+	int		pointer_location;
+	int		ta_debouncing_count;
+	int 	ghost_detection_enable;
+	int		pen_enable;
+#endif
 };
 
 struct touch_power_module {
@@ -81,6 +87,7 @@ struct touch_platform_data {
 };
 
 struct t_data {
+    u16             id;
 	u16             state;
 	u16             tool_type;
 	u16             x_position;
@@ -89,6 +96,7 @@ struct t_data {
 	u16             width_minor;
 	u16             width_orientation;
 	u16             pressure;
+	u8          	status;
 };
 
 struct b_data {
@@ -100,6 +108,7 @@ struct touch_data {
 	u8              total_num;
 	u8              prev_total_num;
 	u8              state;
+    u8              palm;
 	struct t_data   curr_data[MAX_FINGER];
 	struct t_data   prev_data[MAX_FINGER];
 	struct b_data   curr_button;
@@ -146,11 +155,21 @@ struct section_info
 };
 
 struct ghost_finger_ctrl {
-	volatile u8 stage;
+	volatile u8	 stage;
+#if defined(CONFIG_TOUCH_REG_MAP_TM2000) || defined(CONFIG_TOUCH_REG_MAP_TM2372)
+	volatile u8	incoming_call;
+#endif
+	int probe;
 	int count;
 	int min_count;
 	int max_count;
 	int ghost_check_count;
+	int saved_x;
+	int saved_y;
+	int saved_last_x;
+	int saved_last_y;
+	int max_moved;
+	int max_pressure;
 };
 
 struct jitter_history_data {
@@ -190,44 +209,21 @@ struct accuracy_filter_info {
 	struct accuracy_history_data	his_data;
 };
 
-struct lge_touch_data {
-	void*                           h_touch;
-	atomic_t                        next_work;
-	atomic_t                        device_init;
-	u8                              work_sync_err_cnt;
-	u8                              ic_init_err_cnt;
-	u8                              charger_type;
-	volatile int                    curr_pwr_state;
-	int                             curr_resume_state;
-	struct i2c_client               *client;
-	struct input_dev                *input_dev;
-	struct hrtimer                  timer;
-	struct work_struct              work;
-	struct delayed_work             work_init;
-	struct delayed_work             work_touch_lock;
-	struct work_struct              work_fw_upgrade;
-	struct early_suspend            early_suspend;
-	struct touch_platform_data      *pdata;
-	struct touch_data               ts_data;
-	struct touch_fw_info            fw_info;
-	struct fw_upgrade_info          fw_upgrade;
-	struct section_info             st_info;
-	struct kobject                  lge_touch_kobj;
-	struct ghost_finger_ctrl        gf_ctrl;
-	struct jitter_filter_info       jitter_filter;
-	struct accuracy_filter_info     accuracy_filter;
-};
-
 struct touch_device_driver {
-	int     (*probe)        (struct i2c_client *client);
-	void    (*remove)       (struct i2c_client *client);
-	int     (*init)	        (struct i2c_client *client, struct touch_fw_info* info);
-	int     (*data)	        (struct i2c_client *client, struct t_data* data,
-					struct b_data* button, u8* total_num);
-	int     (*power)        (struct i2c_client *client, int power_ctrl);
-	int     (*ic_ctrl)      (struct i2c_client *client, u8 code, u16 value);
+	int		(*probe)		(struct i2c_client *client);
+#if defined(CONFIG_TOUCH_REG_MAP_TM2000) || defined(CONFIG_TOUCH_REG_MAP_TM2372)
+	int		(*resolution)	(struct i2c_client *client);
+#endif
+	void	(*remove)		(struct i2c_client *client);
+	int		(*init)			(struct i2c_client *client, struct touch_fw_info* info);
+	int		(*data)			(struct i2c_client *client, struct touch_data* data);
+	int		(*power)		(struct i2c_client *client, int power_ctrl);
+#if defined(CONFIG_TOUCH_REG_MAP_TM2000) || defined(CONFIG_TOUCH_REG_MAP_TM2372)
+	int		(*ic_ctrl)		(struct i2c_client *client, u8 code, u32 value);
+#else
+	int		(*ic_ctrl)		(struct i2c_client *client, u8 code, u16 value);
+#endif
 	int 	(*fw_upgrade)	(struct i2c_client *client, const char* fw_path);
-	int 	(*fw_upgrade_check)	(struct lge_touch_data *ts);
 };
 
 enum {
@@ -298,16 +294,29 @@ enum {
 	BUTTON_CANCLED = 0xff,
 };
 
-enum {
+enum{
+	FINGER_RELEASED	= 0,
+	FINGER_PRESSED	= 1,
+};
+
+enum{
 	KEYGUARD_RESERVED,
 	KEYGUARD_ENABLE,
 };
+
+#if defined(CONFIG_TOUCH_REG_MAP_TM2000) || defined(CONFIG_TOUCH_REG_MAP_TM2372)
+enum{
+	INCOMIMG_CALL_RESERVED,
+	INCOMIMG_CALL_TOUCH,
+};
+#endif
 
 enum {
 	GHOST_STAGE_CLEAR = 0,
 	GHOST_STAGE_1 = 1,
 	GHOST_STAGE_2 = 2,
 	GHOST_STAGE_3 = 4,
+	GHOST_STAGE_4 = 8,
 };
 
 enum {
@@ -362,6 +371,19 @@ enum {
 	DEBUG_TIME_PROFILE_ALL                  = (1U << 5),	// 32
 };
 #endif
+
+enum{
+	TIME_EX_PROBE,
+	TIME_EX_RESUME_ON,
+	TIME_EX_FIRST_INT_TIME,
+	TIME_EX_PREV_PRESS_TIME,
+	TIME_EX_CURR_PRESS_TIME,
+	TIME_EX_BUTTON_PRESS_START_TIME,
+	TIME_EX_BUTTON_PRESS_END_TIME,
+	TIME_EX_FIRST_GHOST_DETECT_TIME,
+	TIME_EX_SECOND_GHOST_DETECT_TIME,
+	TIME_EX_PROFILE_MAX
+};
 
 #define LGE_TOUCH_NAME		"lge_touch"
 

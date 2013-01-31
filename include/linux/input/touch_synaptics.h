@@ -26,6 +26,9 @@
 #define ANALOG_TABLE_START                      0xe9
 #define BUTTON_TABLE_START                      0xe3
 
+#define PAGE_SELECT_REG					0xFF		/* Button exists Page 02 */
+#define PAGE_MAX_NUM					4			/* number of page register */
+
 struct ts_function_descriptor {
 	u8 	query_base;
 	u8 	command_base;
@@ -33,6 +36,11 @@ struct ts_function_descriptor {
 	u8 	data_base;
 	u8 	int_source_count;
 	u8 	id;
+};
+
+struct ts_ic_function {
+	struct ts_function_descriptor dsc;
+	u8 	function_page;
 };
 
 struct finger_data {
@@ -61,17 +69,18 @@ struct interrupt_bit_mask {
 
 struct synaptics_ts_data {
 	u8	is_probed;
-	struct regulator                *regulator_vdd;
-	struct regulator                *regulator_vio;
-	struct i2c_client               *client;
-	struct touch_platform_data      *pdata;
-	struct ts_function_descriptor   common_dsc;
-	struct ts_function_descriptor   finger_dsc;
-	struct ts_function_descriptor   button_dsc;
-	struct ts_function_descriptor   flash_dsc;
-	struct cur_touch_data           ts_data;
-	struct touch_fw_info            *fw_info;
-	struct interrupt_bit_mask       interrupt_mask;
+	struct regulator*	regulator_vdd;
+	struct regulator*	regulator_vio;
+	struct i2c_client*	client;
+	struct touch_platform_data*		pdata;
+	struct ts_ic_function	common_fc;
+	struct ts_ic_function	finger_fc;
+	struct ts_ic_function	button_fc;
+	struct ts_ic_function	analog_fc;	/* FIXME: not used in ClearPad3000 serise */
+	struct ts_ic_function	flash_fc;
+	struct cur_touch_data	ts_data;
+	struct touch_fw_info*	fw_info;
+	struct interrupt_bit_mask	interrupt_mask;
 #if defined(CONFIG_TOUCH_REG_MAP_TM2000) || defined(CONFIG_TOUCH_REG_MAP_TM2372)
 	struct ts_function_descriptor   analog_dsc;
 #endif
