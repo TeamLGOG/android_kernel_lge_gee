@@ -461,6 +461,7 @@ int32_t msm_actuator_init_step_table_use_eeprom(struct msm_actuator_ctrl_t *a_ct
 			imx091_afcalib_data[2];
 	printk("[QCTK_EEPROM][IMX091] %s: act_start = %d\n",__func__,act_start);
 	printk("[QCTK_EEPROM][IMX091] %s: act_macro = %d\n",__func__,act_macro);
+        #endif
 
 	/* Fill step position table */
 	a_ctrl->step_position_table =
