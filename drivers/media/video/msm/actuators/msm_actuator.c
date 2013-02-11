@@ -14,13 +14,16 @@
 #include "msm_actuator.h"
 
 
-#ifdef CONFIG_SEKONIX_LENS_ACT
+
 #define CHECK_ACT_WRITE_COUNT
 #define ACT_STOP_POS            10
 #define ACT_MIN_MOVE_RANGE      200
 #define ACT_POSTURE_MARGIN      100
+#ifdef CONFIG_SEKONIX_LENS_ACT
 extern uint8_t imx111_afcalib_data[4];
-#else
+#endif
+#if defined(CONFIG_IMX091)
+extern uint8_t imx091_afcalib_data[8];
 /* modification qct's af calibration routines */
 #define ACTUATOR_EEPROM_SADDR                (0x50 >> 1)
 #define ACTUATOR_START_ADDR                  0x06
@@ -445,10 +448,20 @@ int32_t msm_actuator_init_step_table_use_eeprom(struct msm_actuator_ctrl_t *a_ct
 
 	CDBG("%s called\n", __func__);
 	// set act_start, act_macro
+        #ifdef CONFIG_SEKONIX_LENS_ACT
 	act_start = (uint16_t)(imx111_afcalib_data[1] << 8) |
 			imx111_afcalib_data[0];
 	act_macro = ((uint16_t)(imx111_afcalib_data[3] << 8) |
 			imx111_afcalib_data[2])+20;
+        #endif
+	#if defined(CONFIG_IMX091)
+	act_start = (uint16_t)(imx091_afcalib_data[1] << 8) |
+			imx091_afcalib_data[0];
+	act_macro = (uint16_t)(imx091_afcalib_data[3] << 8) |
+			imx091_afcalib_data[2];
+	printk("[QCTK_EEPROM][IMX091] %s: act_start = %d\n",__func__,act_start);
+	printk("[QCTK_EEPROM][IMX091] %s: act_macro = %d\n",__func__,act_macro);
+
 	/* Fill step position table */
 	a_ctrl->step_position_table =
 		kmalloc(sizeof(uint16_t) *
@@ -634,6 +647,7 @@ static int32_t msm_actuator_set_default_focus(
 	return rc;
 }
 
+#define ACT_STOP_POS 10
 static int32_t msm_actuator_power_down(struct msm_actuator_ctrl_t *a_ctrl)
 {
 	int32_t rc = 0;
