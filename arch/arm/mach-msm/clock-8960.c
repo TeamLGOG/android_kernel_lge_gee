@@ -393,6 +393,7 @@ static int set_vdd_dig_8960(struct clk_vdd_class *vdd_class, int level)
 
 static DEFINE_VDD_CLASS(vdd_dig, set_vdd_dig_8960);
 
+static int rpm_vreg_dig_8930 = RPM_VREG_ID_PM8038_VDD_DIG_CORNER;
 static int set_vdd_dig_8930(struct clk_vdd_class *vdd_class, int level)
 {
 	static const int vdd_corner[] = {
@@ -401,7 +402,7 @@ static int set_vdd_dig_8930(struct clk_vdd_class *vdd_class, int level)
 		[VDD_DIG_NOMINAL] = RPM_VREG_CORNER_NOMINAL,
 		[VDD_DIG_HIGH]    = RPM_VREG_CORNER_HIGH,
 	};
-	return rpm_vreg_set_voltage(RPM_VREG_ID_PM8038_VDD_DIG_CORNER,
+	return rpm_vreg_set_voltage(rpm_vreg_dig_8930,
 					RPM_VREG_VOTER3,
 					vdd_corner[level],
 					RPM_VREG_CORNER_HIGH, 1);
@@ -467,6 +468,36 @@ static int set_vdd_sr2_hdmi_pll_8064(struct clk_vdd_class *vdd_class, int level)
 				    sr2_lreg_uv[level], sr2_lreg_uv[level], 1);
 }
 
+static int set_vdd_sr2_hdmi_pll_8930_pm8917(struct clk_vdd_class *vdd_class,
+	int level)
+{
+	int rc = 0;
+
+	if (level == VDD_SR2_HDMI_PLL_OFF) {
+		rc = rpm_vreg_set_voltage(RPM_VREG_ID_PM8917_L23,
+				RPM_VREG_VOTER3, 0, 0, 1);
+		if (rc)
+			return rc;
+		rc = rpm_vreg_set_voltage(RPM_VREG_ID_PM8917_S8,
+				RPM_VREG_VOTER3, 0, 0, 1);
+		if (rc)
+			rpm_vreg_set_voltage(RPM_VREG_ID_PM8917_L23,
+				RPM_VREG_VOTER3, 1800000, 1800000, 1);
+	} else {
+		rc = rpm_vreg_set_voltage(RPM_VREG_ID_PM8917_S8,
+				RPM_VREG_VOTER3, 2050000, 2100000, 1);
+		if (rc)
+			return rc;
+		rc = rpm_vreg_set_voltage(RPM_VREG_ID_PM8917_L23,
+				RPM_VREG_VOTER3, 1800000, 1800000, 1);
+		if (rc)
+			rpm_vreg_set_voltage(RPM_VREG_ID_PM8917_S8,
+					RPM_VREG_VOTER3, 0, 0, 1);
+	}
+
+	return rc;
+}
+
 static int set_vdd_sr2_hdmi_pll_8930(struct clk_vdd_class *vdd_class, int level)
 {
 	return rpm_vreg_set_voltage(RPM_VREG_ID_PM8038_L23, RPM_VREG_VOTER3,
@@ -488,7 +519,6 @@ static struct pll_clk pll2_clk = {
 		.rate = 800000000,
 		.ops = &clk_ops_local_pll,
 		CLK_INIT(pll2_clk.c),
-		.warned = true,
 	},
 };
 
@@ -502,7 +532,6 @@ static struct pll_clk pll3_clk = {
 		.vdd_class = &vdd_sr2_hdmi_pll,
 		.fmax[VDD_SR2_HDMI_PLL_ON] = ULONG_MAX,
 		CLK_INIT(pll3_clk.c),
-		.warned = true,
 	},
 };
 
@@ -517,7 +546,6 @@ static struct pll_vote_clk pll4_clk = {
 		.rate = 393216000,
 		.ops = &clk_ops_pll_vote,
 		CLK_INIT(pll4_clk.c),
-		.warned = true,
 	},
 };
 
@@ -532,7 +560,6 @@ static struct pll_vote_clk pll8_clk = {
 		.rate = 384000000,
 		.ops = &clk_ops_pll_vote,
 		CLK_INIT(pll8_clk.c),
-		.warned = true,
 	},
 };
 
@@ -547,7 +574,6 @@ static struct pll_vote_clk pll14_clk = {
 		.rate = 480000000,
 		.ops = &clk_ops_pll_vote,
 		CLK_INIT(pll14_clk.c),
-		.warned = true,
 	},
 };
 
@@ -559,7 +585,6 @@ static struct pll_clk pll15_clk = {
 		.rate = 975000000,
 		.ops = &clk_ops_local_pll,
 		CLK_INIT(pll15_clk.c),
-		.warned = true,
 	},
 };
 
@@ -1353,6 +1378,9 @@ static struct clk_freq_tbl clk_tbl_gsbi_qup[] = {
 	F_GSBI_QUP(24000000, pll8, 4, 1,  4),
 	F_GSBI_QUP(25600000, pll8, 1, 1, 15),
 	F_GSBI_QUP(27000000, pxo,  1, 0,  0),
+#if defined(CONFIG_LGE_BROADCAST_ONESEG)
+	F_GSBI_QUP(32000000, pll8, 4, 1,  3),
+#endif	 /* CONFIG_LGE_BROADCAST_ONESEG */
 	F_GSBI_QUP(48000000, pll8, 4, 1,  2),
 	F_GSBI_QUP(51200000, pll8, 1, 2, 15),
 	F_END
@@ -1508,6 +1536,11 @@ static CLK_SDC(sdc2_clk, 2, 5,  52000000, 104000000);
 static CLK_SDC(sdc3_clk, 3, 4, 104000000, 208000000);
 static CLK_SDC(sdc4_clk, 4, 3,  33000000,  67000000);
 static CLK_SDC(sdc5_clk, 5, 2,  33000000,  67000000);
+
+static unsigned long fmax_sdc1_8064v2[MAX_VDD_LEVELS] __initdata = {
+	[VDD_DIG_LOW]     = 100000000,
+	[VDD_DIG_NOMINAL] = 200000000,
+};
 
 #define F_TSIF_REF(f, s, d, m, n) \
 	{ \
@@ -1882,6 +1915,7 @@ static struct clk_freq_tbl clk_tbl_ce3[] = {
 	F_CE3(        0, gnd,   1),
 	F_CE3( 48000000, pll8,  8),
 	F_CE3(100000000, pll3, 12),
+	F_CE3(120000000, pll3, 10),
 	F_END
 };
 
@@ -1902,6 +1936,11 @@ static struct rcg_clk ce3_src_clk = {
 		VDD_DIG_FMAX_MAP2(LOW, 50000000, NOMINAL, 100000000),
 		CLK_INIT(ce3_src_clk.c),
 	},
+};
+
+static unsigned long fmax_ce3_8064v2[MAX_VDD_LEVELS] __initdata = {
+	[VDD_DIG_LOW]     =  57000000,
+	[VDD_DIG_NOMINAL] = 120000000,
 };
 
 static struct branch_clk ce3_core_clk = {
@@ -2689,7 +2728,6 @@ static struct rcg_clk csi0_src_clk = {
 		.ops = &clk_ops_rcg,
 		VDD_DIG_FMAX_MAP2(LOW, 86000000, NOMINAL, 178000000),
 		CLK_INIT(csi0_src_clk.c),
-		.warned = true,
 	},
 };
 
@@ -2707,7 +2745,6 @@ static struct branch_clk csi0_clk = {
 		.dbg_name = "csi0_clk",
 		.ops = &clk_ops_branch,
 		CLK_INIT(csi0_clk.c),
-		.warned = true,
 	},
 };
 
@@ -2747,7 +2784,6 @@ static struct rcg_clk csi1_src_clk = {
 		.ops = &clk_ops_rcg,
 		VDD_DIG_FMAX_MAP2(LOW, 86000000, NOMINAL, 178000000),
 		CLK_INIT(csi1_src_clk.c),
-		.warned = true,
 	},
 };
 
@@ -2765,7 +2801,6 @@ static struct branch_clk csi1_clk = {
 		.dbg_name = "csi1_clk",
 		.ops = &clk_ops_branch,
 		CLK_INIT(csi1_clk.c),
-		.warned = true,
 	},
 };
 
@@ -2805,7 +2840,6 @@ static struct rcg_clk csi2_src_clk = {
 		.ops = &clk_ops_rcg,
 		VDD_DIG_FMAX_MAP2(LOW, 86000000, NOMINAL, 178000000),
 		CLK_INIT(csi2_src_clk.c),
-		.warned = true,
 	},
 };
 
@@ -2823,7 +2857,6 @@ static struct branch_clk csi2_clk = {
 		.dbg_name = "csi2_clk",
 		.ops = &clk_ops_branch,
 		CLK_INIT(csi2_clk.c),
-		.warned = true,
 	},
 };
 
@@ -2852,6 +2885,7 @@ static struct clk *pix_rdi_mux_map[] = {
 };
 
 struct pix_rdi_clk {
+	bool prepared;
 	bool enabled;
 	unsigned long cur_rate;
 
@@ -2877,6 +2911,7 @@ static int pix_rdi_clk_set_rate(struct clk *c, unsigned long rate)
 	unsigned long flags;
 	struct pix_rdi_clk *rdi = to_pix_rdi_clk(c);
 	struct clk **mux_map = pix_rdi_mux_map;
+	unsigned long old_rate = rdi->cur_rate;
 
 	/*
 	 * These clocks select three inputs via two muxes. One mux selects
@@ -2887,7 +2922,7 @@ static int pix_rdi_clk_set_rate(struct clk *c, unsigned long rate)
 	 * needs to be on at what time.
 	 */
 	for (i = 0; mux_map[i]; i++) {
-		ret = clk_enable(mux_map[i]);
+		ret = clk_prepare_enable(mux_map[i]);
 		if (ret)
 			goto err;
 	}
@@ -2896,11 +2931,21 @@ static int pix_rdi_clk_set_rate(struct clk *c, unsigned long rate)
 		goto err;
 	}
 	/* Keep the new source on when switching inputs of an enabled clock */
-	if (rdi->enabled) {
-		clk_disable(mux_map[rdi->cur_rate]);
-		clk_enable(mux_map[rate]);
+	if (rdi->prepared) {
+		ret = clk_prepare(mux_map[rate]);
+		if (ret)
+			goto err;
 	}
-	spin_lock_irqsave(&local_clock_reg_lock, flags);
+	spin_lock_irqsave(&c->lock, flags);
+	if (rdi->enabled) {
+		ret = clk_enable(mux_map[rate]);
+		if (ret) {
+			spin_unlock_irqrestore(&c->lock, flags);
+			clk_unprepare(mux_map[rate]);
+			goto err;
+		}
+	}
+	spin_lock(&local_clock_reg_lock);
 	reg = readl_relaxed(rdi->s2_reg);
 	reg &= ~rdi->s2_mask;
 	reg |= rate == 2 ? rdi->s2_mask : 0;
@@ -2922,10 +2967,16 @@ static int pix_rdi_clk_set_rate(struct clk *c, unsigned long rate)
 	mb();
 	udelay(1);
 	rdi->cur_rate = rate;
-	spin_unlock_irqrestore(&local_clock_reg_lock, flags);
+	spin_unlock(&local_clock_reg_lock);
+
+	if (rdi->enabled)
+		clk_disable(mux_map[old_rate]);
+	spin_unlock_irqrestore(&c->lock, flags);
+	if (rdi->prepared)
+		clk_unprepare(mux_map[old_rate]);
 err:
 	for (i--; i >= 0; i--)
-		clk_disable(mux_map[i]);
+		clk_disable_unprepare(mux_map[i]);
 
 	return 0;
 }
@@ -2933,6 +2984,13 @@ err:
 static unsigned long pix_rdi_clk_get_rate(struct clk *c)
 {
 	return to_pix_rdi_clk(c)->cur_rate;
+}
+
+static int pix_rdi_clk_prepare(struct clk *c)
+{
+	struct pix_rdi_clk *rdi = to_pix_rdi_clk(c);
+	rdi->prepared = true;
+	return 0;
 }
 
 static int pix_rdi_clk_enable(struct clk *c)
@@ -2957,6 +3015,12 @@ static void pix_rdi_clk_disable(struct clk *c)
 	__branch_disable_reg(&rdi->b, rdi->c.dbg_name);
 	spin_unlock_irqrestore(&local_clock_reg_lock, flags);
 	rdi->enabled = false;
+}
+
+static void pix_rdi_clk_unprepare(struct clk *c)
+{
+	struct pix_rdi_clk *rdi = to_pix_rdi_clk(c);
+	rdi->prepared = false;
 }
 
 static int pix_rdi_clk_reset(struct clk *c, enum clk_reset_action action)
@@ -2995,8 +3059,10 @@ static enum handoff pix_rdi_clk_handoff(struct clk *c)
 }
 
 static struct clk_ops clk_ops_pix_rdi_8960 = {
+	.prepare = pix_rdi_clk_prepare,
 	.enable = pix_rdi_clk_enable,
 	.disable = pix_rdi_clk_disable,
+	.unprepare = pix_rdi_clk_unprepare,
 	.handoff = pix_rdi_clk_handoff,
 	.set_rate = pix_rdi_clk_set_rate,
 	.get_rate = pix_rdi_clk_get_rate,
@@ -3434,24 +3500,26 @@ static struct rcg_clk gfx2d1_clk = {
 		.ctl_val = CC_BANKED(9, 6, n), \
 	}
 
-static struct clk_freq_tbl clk_tbl_gfx3d_8960ab[] = {
-	F_GFX3D(        0, gnd,  0,  0),
-	F_GFX3D( 27000000, pxo,  0,  0),
-	F_GFX3D( 48000000, pll8, 1,  8),
-	F_GFX3D( 54857000, pll8, 1,  7),
-	F_GFX3D( 64000000, pll8, 1,  6),
-	F_GFX3D( 76800000, pll8, 1,  5),
-	F_GFX3D( 96000000, pll8, 1,  4),
-	F_GFX3D(128000000, pll8, 1,  3),
-	F_GFX3D(145455000, pll2, 2, 11),
-	F_GFX3D(160000000, pll2, 1,  5),
-	F_GFX3D(177778000, pll2, 2,  9),
-	F_GFX3D(200000000, pll2, 1,  4),
-	F_GFX3D(228571000, pll2, 2,  7),
-	F_GFX3D(266667000, pll2, 1,  3),
-	F_GFX3D(320000000, pll2, 2,  5),
-	F_GFX3D(325000000, pll3, 1,  2),
-	F_GFX3D(400000000, pll2, 1,  2),
+/*Shared by 8064, 8930, and 8960ab*/
+static struct clk_freq_tbl clk_tbl_gfx3d[] = {
+	F_GFX3D(        0, gnd,   0,  0),
+	F_GFX3D( 27000000, pxo,   0,  0),
+	F_GFX3D( 48000000, pll8,  1,  8),
+	F_GFX3D( 54857000, pll8,  1,  7),
+	F_GFX3D( 64000000, pll8,  1,  6),
+	F_GFX3D( 76800000, pll8,  1,  5),
+	F_GFX3D( 96000000, pll8,  1,  4),
+	F_GFX3D(128000000, pll8,  1,  3),
+	F_GFX3D(145455000, pll2,  2, 11),
+	F_GFX3D(160000000, pll2,  1,  5),
+	F_GFX3D(177778000, pll2,  2,  9),
+	F_GFX3D(192000000, pll8,  1,  2),
+	F_GFX3D(200000000, pll2,  1,  4),
+	F_GFX3D(228571000, pll2,  2,  7),
+	F_GFX3D(266667000, pll2,  1,  3),
+	F_GFX3D(320000000, pll2,  2,  5),
+	F_GFX3D(400000000, pll2,  1,  2),
+	F_GFX3D(450000000, pll15, 1,  2),
 	F_END
 };
 
@@ -3476,46 +3544,10 @@ static struct clk_freq_tbl clk_tbl_gfx3d_8960[] = {
 	F_END
 };
 
-static struct clk_freq_tbl clk_tbl_gfx3d_8064[] = {
-	F_GFX3D(        0, gnd,   0,  0),
-	F_GFX3D( 27000000, pxo,   0,  0),
-	F_GFX3D( 48000000, pll8,  1,  8),
-	F_GFX3D( 54857000, pll8,  1,  7),
-	F_GFX3D( 64000000, pll8,  1,  6),
-	F_GFX3D( 76800000, pll8,  1,  5),
-	F_GFX3D( 96000000, pll8,  1,  4),
-	F_GFX3D(128000000, pll8,  1,  3),
-	F_GFX3D(145455000, pll2,  2, 11),
-	F_GFX3D(160000000, pll2,  1,  5),
-	F_GFX3D(177778000, pll2,  2,  9),
-	F_GFX3D(200000000, pll2,  1,  4),
-	F_GFX3D(228571000, pll2,  2,  7),
-	F_GFX3D(266667000, pll2,  1,  3),
-	F_GFX3D(325000000, pll15, 1,  3),
-	F_GFX3D(400000000, pll2,  1,  2),
-	F_END
-};
-
-static struct clk_freq_tbl clk_tbl_gfx3d_8930[] = {
-	F_GFX3D(        0, gnd,   0,  0),
-	F_GFX3D( 27000000, pxo,   0,  0),
-	F_GFX3D( 48000000, pll8,  1,  8),
-	F_GFX3D( 54857000, pll8,  1,  7),
-	F_GFX3D( 64000000, pll8,  1,  6),
-	F_GFX3D( 76800000, pll8,  1,  5),
-	F_GFX3D( 96000000, pll8,  1,  4),
-	F_GFX3D(128000000, pll8,  1,  3),
-	F_GFX3D(145455000, pll2,  2, 11),
-	F_GFX3D(160000000, pll2,  1,  5),
-	F_GFX3D(177778000, pll2,  2,  9),
-	F_GFX3D(192000000, pll8,  1,  2),
-	F_GFX3D(200000000, pll2,  1,  4),
-	F_GFX3D(228571000, pll2,  2,  7),
-	F_GFX3D(266667000, pll2,  1,  3),
-	F_GFX3D(320000000, pll2,  2,  5),
-	F_GFX3D(400000000, pll2,  1,  2),
-	F_GFX3D(450000000, pll15, 1,  2),
-	F_END
+static unsigned long fmax_gfx3d_8064ab[MAX_VDD_LEVELS] __initdata = {
+	[VDD_DIG_LOW]     = 128000000,
+	[VDD_DIG_NOMINAL] = 325000000,
+	[VDD_DIG_HIGH]    = 450000000
 };
 
 static unsigned long fmax_gfx3d_8064[MAX_VDD_LEVELS] __initdata = {
@@ -3568,7 +3600,7 @@ static struct rcg_clk gfx3d_clk = {
 	.ns_reg = GFX3D_NS_REG,
 	.root_en_mask = BIT(2),
 	.set_rate = set_rate_mnd_banked,
-	.freq_tbl = clk_tbl_gfx3d_8960,
+	.freq_tbl = clk_tbl_gfx3d,
 	.bank_info = &bmnd_info_gfx3d,
 	.current_freq = &rcg_dummy_freq,
 	.c = {
@@ -3970,7 +4002,6 @@ static struct rcg_clk rot_clk = {
 	},
 };
 
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 static int hdmi_pll_clk_enable(struct clk *c)
 {
 	int ret;
@@ -4035,10 +4066,6 @@ static struct clk_freq_tbl clk_tbl_tv[] = {
 	F_TV(148500000, hdmi_pll, 148500000, 1, 0, 0),
 	F_END
 };
-#else
-static struct clk_freq_tbl clk_tbl_tv[] = {
-};
-#endif
 
 static unsigned long fmax_tv_src_8064[MAX_VDD_LEVELS] __initdata = {
 	[VDD_DIG_LOW]     =  74250000,
@@ -4051,13 +4078,11 @@ static unsigned long fmax_tv_src_8064[MAX_VDD_LEVELS] __initdata = {
  */
 void set_rate_tv(struct rcg_clk *rcg, struct clk_freq_tbl *nf)
 {
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 	unsigned long pll_rate = (unsigned long)nf->extra_freq_data;
 	if (pll_rate) {
 		hdmi_pll_set_rate(pll_rate);
 		hdmi_pll_clk.rate = pll_rate;
 	}
-#endif
 	set_rate_mnd(rcg, nf);
 }
 
@@ -4250,6 +4275,7 @@ static struct clk_freq_tbl clk_tbl_vcodec[] = {
 	F_VCODEC(133330000, pll2, 1,  6),
 	F_VCODEC(200000000, pll2, 1,  4),
 	F_VCODEC(228570000, pll2, 2,  7),
+	F_VCODEC(266670000, pll2, 1,  3),
 	F_END
 };
 
@@ -4278,6 +4304,12 @@ static struct rcg_clk vcodec_clk = {
 		CLK_INIT(vcodec_clk.c),
 		.depends = &vcodec_axi_clk.c,
 	},
+};
+
+static unsigned long fmax_vcodec_8064v2[MAX_VDD_LEVELS] __initdata = {
+	[VDD_DIG_LOW]     = 100000000,
+	[VDD_DIG_NOMINAL] = 200000000,
+	[VDD_DIG_HIGH]    = 266670000,
 };
 
 #define F_VPE(f, s, d) \
@@ -4432,6 +4464,7 @@ static struct clk_freq_tbl clk_tbl_aif_osr_492[] = {
 	F_AIF_OSR( 8192000, pll4, 4, 1,  15),
 	F_AIF_OSR(12288000, pll4, 4, 1,  10),
 	F_AIF_OSR(24576000, pll4, 4, 1,   5),
+	F_AIF_OSR(27000000, pxo,  1, 0,   0),
 	F_END
 };
 
@@ -4448,6 +4481,7 @@ static struct clk_freq_tbl clk_tbl_aif_osr_393[] = {
 	F_AIF_OSR( 8192000, pll4, 4, 1,  12),
 	F_AIF_OSR(12288000, pll4, 4, 1,   8),
 	F_AIF_OSR(24576000, pll4, 4, 1,   4),
+	F_AIF_OSR(27000000, pxo,  1, 0,   0),
 	F_END
 };
 
@@ -4473,7 +4507,7 @@ static struct clk_freq_tbl clk_tbl_aif_osr_393[] = {
 		.c = { \
 			.dbg_name = #i "_clk", \
 			.ops = &clk_ops_rcg, \
-			VDD_DIG_FMAX_MAP1(LOW, 24576000), \
+			VDD_DIG_FMAX_MAP1(LOW, 27000000), \
 			CLK_INIT(i##_clk.c), \
 		}, \
 	}
@@ -4499,7 +4533,7 @@ static struct clk_freq_tbl clk_tbl_aif_osr_393[] = {
 		.c = { \
 			.dbg_name = #i "_clk", \
 			.ops = &clk_ops_rcg, \
-			VDD_DIG_FMAX_MAP1(LOW, 24576000), \
+			VDD_DIG_FMAX_MAP1(LOW, 27000000), \
 			CLK_INIT(i##_clk.c), \
 		}, \
 	}
@@ -4589,6 +4623,7 @@ static struct clk_freq_tbl clk_tbl_pcm_492[] = {
 	F_PCM( 8192000, pll4, 4, 1,  15),
 	F_PCM(12288000, pll4, 4, 1,  10),
 	F_PCM(24576000, pll4, 4, 1,   5),
+	F_PCM(27000000, pxo,  1, 0,   0),
 	F_END
 };
 
@@ -4606,6 +4641,7 @@ static struct clk_freq_tbl clk_tbl_pcm_393[] = {
 	F_PCM( 8192000, pll4, 4, 1,  12),
 	F_PCM(12288000, pll4, 4, 1,   8),
 	F_PCM(24576000, pll4, 4, 1,   4),
+	F_PCM(27000000, pxo,  1, 0,   0),
 	F_END
 };
 
@@ -4630,7 +4666,7 @@ static struct rcg_clk pcm_clk = {
 	.c = {
 		.dbg_name = "pcm_clk",
 		.ops = &clk_ops_rcg,
-		VDD_DIG_FMAX_MAP1(LOW, 24576000),
+		VDD_DIG_FMAX_MAP1(LOW, 27000000),
 		CLK_INIT(pcm_clk.c),
 		.rate = ULONG_MAX,
 	},
@@ -4657,7 +4693,7 @@ static struct rcg_clk audio_slimbus_clk = {
 	.c = {
 		.dbg_name = "audio_slimbus_clk",
 		.ops = &clk_ops_rcg,
-		VDD_DIG_FMAX_MAP1(LOW, 24576000),
+		VDD_DIG_FMAX_MAP1(LOW, 27000000),
 		CLK_INIT(audio_slimbus_clk.c),
 	},
 };
@@ -4718,7 +4754,6 @@ static DEFINE_CLK_VOTER(dfab_sdc5_clk, &dfab_clk.c, 0);
 static DEFINE_CLK_VOTER(dfab_sps_clk, &dfab_clk.c, 0);
 static DEFINE_CLK_VOTER(dfab_bam_dmux_clk, &dfab_clk.c, 0);
 static DEFINE_CLK_VOTER(dfab_scm_clk, &dfab_clk.c, 0);
-static DEFINE_CLK_VOTER(dfab_qseecom_clk, &dfab_clk.c, 0);
 static DEFINE_CLK_VOTER(dfab_msmbus_clk, &dfab_clk.c, 0);
 static DEFINE_CLK_VOTER(dfab_msmbus_a_clk, &dfab_a_clk.c, 0);
 
@@ -5211,25 +5246,74 @@ static struct clk_lookup msm_clocks_8064[] = {
 	CLK_LOOKUP("core_clk",		gsbi1_uart_clk.c, "msm_serial_hsl.1"),
 #endif
 	CLK_LOOKUP("core_clk",		gsbi2_uart_clk.c,	""),
+
+#if !defined(CONFIG_MACH_APQ8064_GVDCM)
 	CLK_LOOKUP("core_clk",		gsbi3_uart_clk.c,	""),
-#ifdef CONFIG_MACH_LGE
-	CLK_LOOKUP("core_clk",		gsbi4_uart_clk.c,	"msm_serial_hsl.0"),
 #else
-	CLK_LOOKUP("core_clk",		gsbi4_uart_clk.c,	""),
+	/* GV DCM Felica/NFC Rev.C */
+	#if (defined(CONFIG_LGE_BLUESLEEP) || defined(CONFIG_BCM4334)) && (defined(CONFIG_LGE_FELICA) || defined(CONFIG_LGE_NFC_SONY_CXD2235AGG))
+		CLK_LOOKUP("core_clk",		gsbi3_uart_clk.c,	"msm_serial_hsl.2"),
+	#else
+		CLK_LOOKUP("core_clk",		gsbi3_uart_clk.c,	""),
+	#endif
+#endif
+
+#if !defined(CONFIG_MACH_APQ8064_GVDCM)
+	/* GJ DCM */
+	#if defined(CONFIG_LGE_IRDA)
+		CLK_LOOKUP("core_clk",		gsbi4_uart_clk.c,	"msm_serial_hsl.1"),
+	#else
+		CLK_LOOKUP("core_clk",		gsbi4_uart_clk.c,	"msm_serial_hsl.0"),
+	#endif
+#else
+	/* GV DCM */
+	#if defined(CONFIG_LGE_IRDA)
+		CLK_LOOKUP("core_clk",		gsbi4_uart_clk.c,	"msm_serial_hsl.3"),
+	#else
+		CLK_LOOKUP("core_clk",		gsbi4_uart_clk.c,	"msm_serial_hsl.0"),
+	#endif
 #endif
 	CLK_LOOKUP("core_clk",		gsbi5_uart_clk.c,	""),
-	CLK_LOOKUP("core_clk",		gsbi6_uart_clk.c,	""),
-#ifdef CONFIG_MACH_LGE
-	CLK_LOOKUP("core_clk",		gsbi7_uart_clk.c,	""),
+
+#if !defined(CONFIG_MACH_APQ8064_GVDCM)
+	/* GJ for Felica/NFC */
+	#if defined(CONFIG_LGE_FELICA) || defined(CONFIG_LGE_NFC_SONY_CXD2235AGG)
+		CLK_LOOKUP("core_clk",		gsbi6_uart_clk.c,	"msm_serial_hsl.2"),
+	/* GK for Broadcom BCM4334 IC */
+	#elif defined(CONFIG_LGE_BLUESLEEP)
+		CLK_LOOKUP("core_clk",		gsbi6_uart_clk.c,	"msm_serial_hs.0"),
+	#else
+		CLK_LOOKUP("core_clk",		gsbi6_uart_clk.c,	""),
+	#endif
 #else
-	CLK_LOOKUP("core_clk",		gsbi7_uart_clk.c, "msm_serial_hsl.0"),
+	/* GV for Broadcom BCM4334 IC */
+	#if defined(CONFIG_LGE_BLUESLEEP) || defined(CONFIG_BCM4334)
+		CLK_LOOKUP("core_clk",		gsbi6_uart_clk.c,	"msm_serial_hs.0"),
+	/* GV Felica/NFC for Rev.A,B */
+	#elif defined(CONFIG_LGE_FELICA) || defined(CONFIG_LGE_NFC_SONY_CXD2235AGG)
+		CLK_LOOKUP("core_clk",		gsbi6_uart_clk.c,	"msm_serial_hsl.2"),
+	#else
+		CLK_LOOKUP("core_clk",		gsbi6_uart_clk.c,	""),
+	#endif
+#endif
+
+/* GK/GV IRRC */
+#if defined(CONFIG_LGE_IRRC)
+	CLK_LOOKUP("core_clk",		gsbi7_uart_clk.c,	"msm_serial_hsl.1"),
+#else
+	CLK_LOOKUP("core_clk",		gsbi7_uart_clk.c,	""),
 #endif
 	CLK_LOOKUP("core_clk",		gsbi1_qup_clk.c,	"qup_i2c.0"),
 	CLK_LOOKUP("core_clk",		gsbi2_qup_clk.c,	""),
 	CLK_LOOKUP("core_clk",		gsbi3_qup_clk.c,	"qup_i2c.3"),
 	CLK_LOOKUP("core_clk",		gsbi4_qup_clk.c,	"qup_i2c.4"),
+
+#if defined(CONFIG_LGE_BROADCAST_TDMB) || defined(CONFIG_LGE_BROADCAST_ONESEG)
 	CLK_LOOKUP("core_clk",		gsbi5_qup_clk.c,	"spi_qsd.0"),
-	CLK_LOOKUP("core_clk",		gsbi5_qup_clk.c,	"qup_i2c.5"),
+#else
+	CLK_LOOKUP("core_clk",      gsbi5_qup_clk.c,    "qup_i2c.5"),
+#endif /* CONFIG_LGE_BROADCAST */
+
 	CLK_LOOKUP("core_clk",		gsbi6_qup_clk.c,	""),
 	CLK_LOOKUP("core_clk",		gsbi7_qup_clk.c,	""),
 	CLK_LOOKUP("core_clk",		pdm_clk.c,		""),
@@ -5272,16 +5356,67 @@ static struct clk_lookup msm_clocks_8064[] = {
 #endif
 	CLK_LOOKUP("iface_clk",		gsbi1_p_clk.c,	"qup_i2c.0"),
 	CLK_LOOKUP("iface_clk",		gsbi2_p_clk.c,		""),
+
+#if !defined(CONFIG_MACH_APQ8064_GVDCM)
+	CLK_LOOKUP("iface_clk",		gsbi3_p_clk.c,	""),
+#else
+	/* GV DCM Felica/NFC Rev.C */
+	#if (defined(CONFIG_LGE_BLUESLEEP) || defined(CONFIG_BCM4334))  && (defined(CONFIG_LGE_FELICA) || defined(CONFIG_LGE_NFC_SONY_CXD2235AGG))
+		CLK_LOOKUP("iface_clk",		gsbi3_p_clk.c,	"msm_serial_hsl.2"),
+	#else
+		CLK_LOOKUP("iface_clk",		gsbi3_p_clk.c,	""),
+	#endif
+#endif
 	CLK_LOOKUP("iface_clk",		gsbi3_p_clk.c,		"qup_i2c.3"),
-#ifdef CONFIG_MACH_LGE
-	CLK_LOOKUP("iface_clk",		gsbi4_p_clk.c,		"msm_serial_hsl.0"),
+
+#if !defined(CONFIG_MACH_APQ8064_GVDCM)
+	/* GJ DCM */
+	#if defined(CONFIG_LGE_IRDA)
+		CLK_LOOKUP("iface_clk",		gsbi4_p_clk.c,	"msm_serial_hsl.1"),
+	#else
+		CLK_LOOKUP("iface_clk",		gsbi4_p_clk.c,	"msm_serial_hsl.0"),
+	#endif
+#else
+	/* GV DCM */
+	#if defined(CONFIG_LGE_IRDA)
+		CLK_LOOKUP("iface_clk",		gsbi4_p_clk.c,	"msm_serial_hsl.3"),
+	#else
+		CLK_LOOKUP("iface_clk",		gsbi4_p_clk.c,	"msm_serial_hsl.0"),
+	#endif
 #endif
 	CLK_LOOKUP("iface_clk",		gsbi4_p_clk.c,		"qup_i2c.4"),
+
+#if defined(CONFIG_LGE_BROADCAST_TDMB) || defined(CONFIG_LGE_BROADCAST_ONESEG)
 	CLK_LOOKUP("iface_clk",		gsbi5_p_clk.c,		"spi_qsd.0"),
-	CLK_LOOKUP("iface_clk",		gsbi5_p_clk.c,		"qup_i2c.5"),
-	CLK_LOOKUP("iface_clk",		gsbi6_p_clk.c,		""),
-#ifdef CONFIG_MACH_LGE
-	CLK_LOOKUP("iface_clk",		gsbi7_p_clk.c,		""),
+#else
+	CLK_LOOKUP("iface_clk",     gsbi5_p_clk.c,      "qup_i2c.5"),
+#endif /* CONFIG_LGE_BROADCAST */
+
+
+#if !defined(CONFIG_MACH_APQ8064_GVDCM)
+	/* GJ for Felica/NFC */
+	#if defined(CONFIG_LGE_FELICA) || defined(CONFIG_LGE_NFC_SONY_CXD2235AGG)
+		CLK_LOOKUP("iface_clk",		gsbi6_p_clk.c,	"msm_serial_hsl.2"),
+	/* GK for Broadcom BCM4334 IC */
+	#elif defined(CONFIG_LGE_BLUESLEEP)
+		CLK_LOOKUP("iface_clk",		gsbi6_p_clk.c,	"msm_serial_hs.0"),
+	#else
+		CLK_LOOKUP("iface_clk",		gsbi6_p_clk.c,	""),
+	#endif
+#else
+	/* GV for Broadcom BCM4334 IC */
+	#if defined(CONFIG_LGE_BLUESLEEP) || defined(CONFIG_BCM4334) 
+		CLK_LOOKUP("iface_clk",		gsbi6_p_clk.c,	"msm_serial_hs.0"),
+	/* GV Felica/NFC for Rev.A,B */
+	#elif defined(CONFIG_LGE_FELICA) || defined(CONFIG_LGE_NFC_SONY_CXD2235AGG)
+		CLK_LOOKUP("iface_clk",		gsbi6_p_clk.c,	"msm_serial_hsl.2"),
+	#else
+		CLK_LOOKUP("iface_clk",		gsbi6_p_clk.c,	""),
+	#endif
+#endif
+
+#if defined(CONFIG_LGE_IRRC)
+	CLK_LOOKUP("iface_clk",		gsbi7_p_clk.c,		"msm_serial_hsl.1"),
 #else
 	CLK_LOOKUP("iface_clk",		gsbi7_p_clk.c,	"msm_serial_hsl.0"),
 #endif
@@ -5295,7 +5430,7 @@ static struct clk_lookup msm_clocks_8064[] = {
 	CLK_LOOKUP("iface_clk",		sdc2_p_clk.c,		"msm_sdcc.2"),
 	CLK_LOOKUP("iface_clk",		sdc3_p_clk.c,		"msm_sdcc.3"),
 	CLK_LOOKUP("iface_clk",		sdc4_p_clk.c,		"msm_sdcc.4"),
-#ifdef CONFIG_MSM_PCIE
+#ifdef CONFIG_MSM_PCIE //LGE : featuring 
 	CLK_LOOKUP("iface_clk",		pcie_p_clk.c,		"msm_pcie"),
 	CLK_LOOKUP("ref_clk",		pcie_phy_ref_clk.c,	"msm_pcie"),
 	CLK_LOOKUP("bus_clk",		pcie_a_clk.c,		"msm_pcie"),
@@ -5307,8 +5442,23 @@ static struct clk_lookup msm_clocks_8064[] = {
 	CLK_LOOKUP("core_clk",		pmic_ssbi2_clk.c,	""),
 	CLK_LOOKUP("mem_clk",		rpm_msg_ram_p_clk.c,	""),
 #if defined(CONFIG_MACH_LGE)
-	CLK_LOOKUP("cam_clk",		cam0_clk.c,		"4-000d"),
-	CLK_LOOKUP("cam_clk",		cam2_clk.c,		"4-006e"),
+/* LGE_CHANGE_S, For GV/GK 13M & 2.4M camera driver, 2012.07.20, gayoung85.lee@lge.com */
+#if defined(CONFIG_MACH_APQ8064_GKKT) ||defined(CONFIG_MACH_APQ8064_GKSK) ||defined(CONFIG_MACH_APQ8064_GKU) ||defined(CONFIG_MACH_APQ8064_GKATT) || defined(CONFIG_MACH_APQ8064_GVDCM)
+	CLK_LOOKUP("cam_clk",		cam0_clk.c,		"4-0078"), /* GSBI4, Slave Addr: 0x78, ce1702 */
+	CLK_LOOKUP("cam_clk",		cam2_clk.c, 		"4-006c"), /* GSBI4, Slave Addr: 0x6e, imx132 */
+#endif
+/* LGE_CHANGE_E, For GV/GK 13M & 2.4M camera driver, 2012.07.20, gayoung85.lee@lge.com */
+
+#if 1 //def CONFIG_MACH_APQ8064_J1VD
+	CLK_LOOKUP("cam_clk",		cam0_clk.c,		"4-000d"), /* GSBI4, Slave Addr: 0x0d, imx111 */
+/* LGE_CHANGE_S, for old HW (LGU Rev.A,B VZW Rev.A,B ATT Rev.A), 2012.04.27, jungryoul.choi@lge.com */
+#if 1
+	CLK_LOOKUP("cam_clk",		cam2_clk.c,		"4-006e"), /* GSBI4, Slave Addr: 0x6e, imx119 *//* LGE_CHANGE_S, Using MCLK2, soojung.lim@lge.com */
+#else
+	CLK_LOOKUP("cam_clk",		cam1_clk.c,		"4-006e"), /* GSBI4, Slave Addr: 0x6e, imx119 *//* LGE_CHANGE_S, Using MCLK2, soojung.lim@lge.com */
+#endif
+/* LGE_CHANGE_S, for old HW (LGU Rev.A,B VZW Rev.A,B ATT Rev.A), 2012.04.27, jungryoul.choi@lge.com */
+#endif
 #else /* QCT Original */
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-001a"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0034"),
@@ -5468,7 +5618,6 @@ static struct clk_lookup msm_clocks_8064[] = {
 	CLK_LOOKUP("dfab_clk",		dfab_sps_clk.c,	"msm_sps"),
 	CLK_LOOKUP("bus_clk",		dfab_bam_dmux_clk.c,	"BAM_RMNT"),
 	CLK_LOOKUP("bus_clk",		dfab_scm_clk.c,	"scm"),
-	CLK_LOOKUP("bus_clk",		dfab_qseecom_clk.c,	"qseecom"),
 
 	CLK_LOOKUP("alt_core_clk",    usb_hsic_xcvr_fs_clk.c,  "msm_hsic_host"),
 	CLK_LOOKUP("phy_clk",	      usb_hsic_hsic_clk.c,     "msm_hsic_host"),
@@ -5663,12 +5812,27 @@ static struct clk_lookup msm_clocks_8960_common[] __initdata = {
 	CLK_LOOKUP("iface_clk",		pmic_arb1_p_clk.c,	""),
 	CLK_LOOKUP("core_clk",		pmic_ssbi2_clk.c,	""),
 	CLK_LOOKUP("mem_clk",		rpm_msg_ram_p_clk.c,	""),
+#if defined(CONFIG_MACH_LGE)
+/* LGE_CHANGE_S, For GV/GK 13M & 2.4M camera driver, 2012.07.20, gayoung85.lee@lge.com */
+#if defined(CONFIG_MACH_APQ8064_GKKT) ||defined(CONFIG_MACH_APQ8064_GKSK) ||defined(CONFIG_MACH_APQ8064_GKU) ||defined(CONFIG_MACH_APQ8064_GKATT)
+	CLK_LOOKUP("cam_clk",		cam0_clk.c, "4-0078"), /* GSBI4, Slave Addr: 0x78, ce1702 */
+	CLK_LOOKUP("cam_clk",		cam1_clk.c, "4-006c"), /* GSBI4, Slave Addr: 0x6c, imx132 */
+#endif
+/* LGE_CHANGE_E, For GV/GK 13M & 2.4M camera driver, 2012.07.20, gayoung85.lee@lge.com */
+#ifdef CONFIG_MACH_APQ8064_J1VD
+	CLK_LOOKUP("cam_clk",		cam0_clk.c, "4-000d"), /* GSBI4, Slave Addr: 0x0d, imx111 */
+	CLK_LOOKUP("cam_clk",		cam1_clk.c, "4-006e"), /* GSBI4, Slave Addr: 0x6e, imx119 */
+#endif
+#else /* QCT Original */
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-001a"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-006c"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0048"),
 	CLK_LOOKUP("cam_clk",		cam2_clk.c,		NULL),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0020"),
 	CLK_LOOKUP("cam_clk",		cam0_clk.c,	"4-0034"),
+        CLK_LOOKUP("cam_clk",           cam0_clk.c,     "4-0036"),
+        CLK_LOOKUP("cam_clk",           cam0_clk.c,     "4-0010"),
+#endif
 	CLK_LOOKUP("csi_src_clk",	csi0_src_clk.c,		"msm_csid.0"),
 	CLK_LOOKUP("csi_src_clk",	csi1_src_clk.c,		"msm_csid.1"),
 	CLK_LOOKUP("csi_src_clk",	csi2_src_clk.c,		"msm_csid.2"),
@@ -5819,7 +5983,6 @@ static struct clk_lookup msm_clocks_8960_common[] __initdata = {
 	CLK_LOOKUP("dfab_clk",		dfab_sps_clk.c,	"msm_sps"),
 	CLK_LOOKUP("bus_clk",		dfab_bam_dmux_clk.c,	"BAM_RMNT"),
 	CLK_LOOKUP("bus_clk",		dfab_scm_clk.c,	"scm"),
-	CLK_LOOKUP("bus_clk",		dfab_qseecom_clk.c,	"qseecom"),
 
 	CLK_LOOKUP("mem_clk",		ebi1_adm_clk.c, "msm_dmov"),
 	CLK_LOOKUP("mem_clk",		ebi1_acpu_a_clk.c, ""),
@@ -5855,6 +6018,7 @@ static struct clk_lookup msm_clocks_8960_only[] __initdata = {
 
 static struct clk_lookup msm_clocks_8960ab_only[] __initdata = {
 	CLK_LOOKUP("bus_clk", gfx3d_axi_clk.c, "footswitch-8x60.2"),
+	CLK_LOOKUP("core_clk", gfx3d_axi_clk.c, "msm_iommu.10"),
 	CLK_LOOKUP("div_clk",	tv_src_div_clk.c,	""),
 };
 
@@ -6150,7 +6314,6 @@ static struct clk_lookup msm_clocks_8930[] = {
 	CLK_LOOKUP("dfab_clk",		dfab_sps_clk.c,	"msm_sps"),
 	CLK_LOOKUP("bus_clk",		dfab_bam_dmux_clk.c,	"BAM_RMNT"),
 	CLK_LOOKUP("bus_clk",		dfab_scm_clk.c,	"scm"),
-	CLK_LOOKUP("bus_clk",		dfab_qseecom_clk.c,	"qseecom"),
 
 	CLK_LOOKUP("mem_clk",		ebi1_adm_clk.c, "msm_dmov"),
 	CLK_LOOKUP("mem_clk",		ebi1_acpu_a_clk.c, ""),
@@ -6273,11 +6436,11 @@ static void __init reg_init(void)
 		rmwreg(0x00000003, AHB_EN_REG,  0x6C000103);
 		writel_relaxed(0x000007F9, AHB_EN2_REG);
 	} else {
-		rmwreg(0x44000000, AHB_EN_REG,  0x6C000103);
+		rmwreg(0x40000000, AHB_EN_REG,  0x6C000103);
 		writel_relaxed(0x3C7097F9, AHB_EN2_REG);
 	}
 
-	if (cpu_is_apq8064())
+	if (cpu_is_apq8064() || cpu_is_apq8064ab())
 		rmwreg(0x00000001, AHB_EN3_REG, 0x00000001);
 
 	/* Deassert all locally-owned MM AHB resets. */
@@ -6300,7 +6463,7 @@ static void __init reg_init(void)
 	rmwreg(0x0027FCFF, MAXI_EN3_REG, 0x003FFFFF);
 	rmwreg(0x0027FCFF, MAXI_EN4_REG, 0x017FFFFF);
 
-	if (cpu_is_apq8064())
+	if (cpu_is_apq8064() || cpu_is_apq8064ab())
 		rmwreg(0x019FECFF, MAXI_EN5_REG, 0x01FFEFFF);
 	if (cpu_is_msm8930() || cpu_is_msm8930aa() || cpu_is_msm8627())
 		rmwreg(0x000004FF, MAXI_EN5_REG, 0x00000FFF);
@@ -6338,7 +6501,8 @@ static void __init reg_init(void)
 	rmwreg(0x80FF0000, VFE_CC_REG,        0xE0FF4010);
 	rmwreg(0x800000FF, VFE_CC2_REG,       0xE00000FF);
 	rmwreg(0x80FF0000, VPE_CC_REG,        0xE0FF0010);
-	if (cpu_is_msm8960ab() || cpu_is_msm8960() || cpu_is_apq8064()) {
+	if (cpu_is_msm8960ab() || cpu_is_msm8960() || cpu_is_apq8064()
+		 || cpu_is_apq8064ab()) {
 		rmwreg(0x80FF0000, DSI2_BYTE_CC_REG,  0xE0FF0010);
 		rmwreg(0x80FF0000, DSI2_PIXEL_CC_REG, 0xE0FF0010);
 		rmwreg(0x80FF0000, JPEGD_CC_REG,      0xE0FF0010);
@@ -6356,7 +6520,7 @@ static void __init reg_init(void)
 		rmwreg(0x80FF0000, GFX2D0_CC_REG,     0xE0FF0010);
 		rmwreg(0x80FF0000, GFX2D1_CC_REG,     0xE0FF0010);
 	}
-	if (cpu_is_apq8064()) {
+	if (cpu_is_apq8064() || cpu_is_apq8064ab()) {
 		rmwreg(0x00000000, TV_CC_REG,         0x00004010);
 		rmwreg(0x80FF0000, VCAP_CC_REG,       0xE0FF1010);
 	}
@@ -6367,7 +6531,7 @@ static void __init reg_init(void)
 	 * and wake-up value to max.
 	 */
 	rmwreg(0x0000004F, USB_HS1_HCLK_FS_REG, 0x0000007F);
-	if (cpu_is_apq8064()) {
+	if (cpu_is_apq8064() || cpu_is_apq8064ab()) {
 		rmwreg(0x0000004F, USB_HS3_HCLK_FS_REG, 0x0000007F);
 		rmwreg(0x0000004F, USB_HS4_HCLK_FS_REG, 0x0000007F);
 	}
@@ -6389,7 +6553,8 @@ static void __init reg_init(void)
 
 	/* Source the dsi_byte_clks from the DSI PHY PLLs */
 	rmwreg(0x1, DSI1_BYTE_NS_REG, 0x7);
-	if (cpu_is_msm8960ab() || cpu_is_msm8960() || cpu_is_apq8064())
+	if (cpu_is_msm8960ab() || cpu_is_msm8960() || cpu_is_apq8064()
+		|| cpu_is_apq8064ab())
 		rmwreg(0x2, DSI2_BYTE_NS_REG, 0x7);
 
 	/* Source the dsi1_esc_clk from the DSI1 PHY PLLs */
@@ -6399,7 +6564,7 @@ static void __init reg_init(void)
 	 * Source the sata_phy_ref_clk from PXO and set predivider of
 	 * sata_pmalive_clk to 1.
 	 */
-	if (cpu_is_apq8064()) {
+	if (cpu_is_apq8064() || cpu_is_apq8064ab()) {
 		rmwreg(0, SATA_PHY_REF_CLK_CTL_REG, 0x1);
 		rmwreg(0, SATA_PMALIVE_CLK_CTL_REG, 0x3);
 	}
@@ -6408,7 +6573,7 @@ static void __init reg_init(void)
 	 * TODO: Programming below PLLs and prng_clk is temporary and
 	 *	 needs to be removed after bootloaders program them.
 	 */
-	if (cpu_is_apq8064()) {
+	if (cpu_is_apq8064() || cpu_is_apq8064ab()) {
 		u32 is_pll_enabled;
 
 		/* Program pxo_src_clk to source from PXO */
@@ -6418,16 +6583,13 @@ static void __init reg_init(void)
 		is_pll_enabled = readl_relaxed(BB_PLL14_STATUS_REG) & BIT(16);
 		if (!is_pll_enabled)
 			/* Ref clk = 27MHz and program pll14 to 480MHz */
-			configure_pll(&pll14_config, &pll14_regs, 1);
-
-		/* Program PLL15 to 975MHz with ref clk = 27MHz */
-		configure_pll(&pll15_config, &pll15_regs, 0);
+			configure_sr_pll(&pll14_config, &pll14_regs, 1);
 
 		/* Check if PLL4 is active */
 		is_pll_enabled = readl_relaxed(LCC_PLL0_STATUS_REG) & BIT(16);
 		if (!is_pll_enabled)
 			/* Ref clk = 27MHz and program pll4 to 393.2160MHz */
-			configure_pll(&pll4_config_393, &pll4_regs, 1);
+			configure_sr_pll(&pll4_config_393, &pll4_regs, 1);
 
 		/* Enable PLL4 source on the LPASS Primary PLL Mux */
 		writel_relaxed(0x1, LCC_PRI_PLL_CLK_CTL_REG);
@@ -6435,6 +6597,17 @@ static void __init reg_init(void)
 		/* Program prng_clk to 64MHz if it isn't configured */
 		if (!readl_relaxed(PRNG_CLK_NS_REG))
 			writel_relaxed(0x2B, PRNG_CLK_NS_REG);
+	}
+
+	if (cpu_is_apq8064()) {
+		/* Program PLL15 to 975MHz with ref clk = 27MHz */
+		configure_sr_pll(&pll15_config, &pll15_regs, 0);
+	} else if (cpu_is_apq8064ab()) {
+		/* Program PLL15 to 900MHZ */
+		pll15_config.l = 0x21 | BVAL(31, 7, 0x620);
+		pll15_config.m = 0x1;
+		pll15_config.n = 0x3;
+		configure_sr_pll(&pll15_config, &pll15_regs, 0);
 	}
 
 	/*
@@ -6445,7 +6618,7 @@ static void __init reg_init(void)
 		pll15_config.l = 0x21 | BVAL(31, 7, 0x600);
 		pll15_config.m = 0x1;
 		pll15_config.n = 0x3;
-		configure_pll(&pll15_config, &pll15_regs, 0);
+		configure_sr_pll(&pll15_config, &pll15_regs, 0);
 		/* Disable AUX and BIST outputs */
 		writel_relaxed(0, MM_PLL3_TEST_CTL_REG);
 	}
@@ -6457,12 +6630,8 @@ static void __init msm8960_clock_pre_init(void)
 	/* Initialize clock registers. */
 	reg_init();
 
-	if (cpu_is_apq8064()) {
+	if (cpu_is_apq8064() || cpu_is_apq8064ab())
 		vdd_sr2_hdmi_pll.set_vdd = set_vdd_sr2_hdmi_pll_8064;
-	} else if (cpu_is_msm8930() || cpu_is_msm8930aa() || cpu_is_msm8627()) {
-		vdd_dig.set_vdd = set_vdd_dig_8930;
-		vdd_sr2_hdmi_pll.set_vdd = set_vdd_sr2_hdmi_pll_8930;
-	}
 
 	/* Detect PLL4 programmed for alternate 491.52MHz clock plan. */
 	if (readl_relaxed(LCC_PLL0_L_VAL_REG) == 0x12) {
@@ -6481,7 +6650,6 @@ static void __init msm8960_clock_pre_init(void)
 			sizeof(msm_clocks_8960_common));
 	if (cpu_is_msm8960ab()) {
 		pll3_clk.c.rate = 650000000;
-		gfx3d_clk.freq_tbl = clk_tbl_gfx3d_8960ab;
 		gfx3d_clk.c.fmax[VDD_DIG_LOW] = 192000000;
 		gfx3d_clk.c.fmax[VDD_DIG_NOMINAL] = 325000000;
 		gfx3d_clk.c.fmax[VDD_DIG_HIGH] = 400000000;
@@ -6493,7 +6661,10 @@ static void __init msm8960_clock_pre_init(void)
 			msm_clocks_8960ab_only, sizeof(msm_clocks_8960ab_only));
 		msm8960_clock_init_data.size -=
 			ARRAY_SIZE(msm_clocks_8960_only);
+
+		gmem_axi_clk.c.depends = &gfx3d_axi_clk.c;
 	} else if (cpu_is_msm8960()) {
+		gfx3d_clk.freq_tbl = clk_tbl_gfx3d_8960;
 		memcpy(msm_clocks_8960 + ARRAY_SIZE(msm_clocks_8960_common),
 			 msm_clocks_8960_only, sizeof(msm_clocks_8960_only));
 		msm8960_clock_init_data.size -=
@@ -6501,13 +6672,30 @@ static void __init msm8960_clock_pre_init(void)
 	}
 	/*
 	 * Change the freq tables for and voltage requirements for
-	 * clocks which differ between 8960 and 8064.
+	 * clocks which differ between chips.
 	 */
 	if (cpu_is_apq8064()) {
-		gfx3d_clk.freq_tbl = clk_tbl_gfx3d_8064;
-
+		gfx3d_clk.freq_tbl = clk_tbl_gfx3d;
 		memcpy(gfx3d_clk.c.fmax, fmax_gfx3d_8064,
 		       sizeof(gfx3d_clk.c.fmax));
+	}
+	if (cpu_is_apq8064ab()) {
+		gfx3d_clk.freq_tbl = clk_tbl_gfx3d;
+		memcpy(gfx3d_clk.c.fmax, fmax_gfx3d_8064ab,
+		       sizeof(gfx3d_clk.c.fmax));
+	}
+	if ((cpu_is_apq8064() &&
+		SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 2) ||
+		cpu_is_apq8064ab()) {
+
+		memcpy(vcodec_clk.c.fmax, fmax_vcodec_8064v2,
+			sizeof(vcodec_clk.c.fmax));
+		memcpy(ce3_src_clk.c.fmax, fmax_ce3_8064v2,
+			sizeof(ce3_src_clk.c.fmax));
+		memcpy(sdc1_clk.c.fmax, fmax_sdc1_8064v2,
+			sizeof(sdc1_clk.c.fmax));
+	}
+	if (cpu_is_apq8064() || cpu_is_apq8064ab()) {
 		memcpy(ijpeg_clk.c.fmax, fmax_ijpeg_8064,
 		       sizeof(ijpeg_clk.c.fmax));
 		memcpy(mdp_clk.c.fmax, fmax_mdp_8064,
@@ -6532,7 +6720,6 @@ static void __init msm8960_clock_pre_init(void)
 		       sizeof(gfx3d_clk.c.fmax));
 	}
 	if (cpu_is_msm8930() || cpu_is_msm8930aa() || cpu_is_msm8627()) {
-		gfx3d_clk.freq_tbl = clk_tbl_gfx3d_8930;
 		pll15_clk.c.rate = 900000000;
 		gmem_axi_clk.c.depends = &gfx3d_axi_clk_8930.c;
 	}
@@ -6542,6 +6729,25 @@ static void __init msm8960_clock_pre_init(void)
 	vote_vdd_level(&vdd_dig, VDD_DIG_HIGH);
 
 	clk_ops_local_pll.enable = sr_pll_clk_enable;
+}
+
+static void __init msm8930_pm8917_clock_pre_init(void)
+{
+	/* detect pmic8917 from board file, and call this init function */
+
+	vdd_dig.set_vdd = set_vdd_dig_8930;
+	rpm_vreg_dig_8930 = RPM_VREG_ID_PM8917_VDD_DIG_CORNER;
+	vdd_sr2_hdmi_pll.set_vdd = set_vdd_sr2_hdmi_pll_8930_pm8917;
+
+	msm8960_clock_pre_init();
+}
+
+static void __init msm8930_clock_pre_init(void)
+{
+	vdd_dig.set_vdd = set_vdd_dig_8930;
+	vdd_sr2_hdmi_pll.set_vdd = set_vdd_sr2_hdmi_pll_8930;
+
+	msm8960_clock_pre_init();
 }
 
 static void __init msm8960_clock_post_init(void)
@@ -6564,7 +6770,7 @@ static void __init msm8960_clock_post_init(void)
 	clk_set_rate(&tsif_ref_clk.c, 105000);
 	clk_set_rate(&tssc_clk.c, 27000000);
 	clk_set_rate(&usb_hs1_xcvr_clk.c, 60000000);
-	if (cpu_is_apq8064()) {
+	if (cpu_is_apq8064() || cpu_is_apq8064ab()) {
 		clk_set_rate(&usb_hs3_xcvr_clk.c, 60000000);
 		clk_set_rate(&usb_hs4_xcvr_clk.c, 60000000);
 	}
@@ -6610,22 +6816,22 @@ static int __init msm8960_clock_late_init(void)
 	struct clk *mmfpb_a_clk = clk_get_sys("clock-8960", "mmfpb_a_clk");
 	struct clk *cfpb_a_clk = clk_get_sys("clock-8960", "cfpb_a_clk");
 
-	/* Vote for MMFPB to be at least 76.8MHz when an Apps CPU is active. */
+	/* Vote for MMFPB to be on when Apps is active. */
 	if (WARN(IS_ERR(mmfpb_a_clk), "mmfpb_a_clk not found (%ld)\n",
 			PTR_ERR(mmfpb_a_clk)))
 		return PTR_ERR(mmfpb_a_clk);
-	rc = clk_set_rate(mmfpb_a_clk, 76800000);
+	rc = clk_set_rate(mmfpb_a_clk, 38400000);
 	if (WARN(rc, "mmfpb_a_clk rate was not set (%d)\n", rc))
 		return rc;
 	rc = clk_prepare_enable(mmfpb_a_clk);
 	if (WARN(rc, "mmfpb_a_clk not enabled (%d)\n", rc))
 		return rc;
 
-	/* Vote for CFPB to be at least 64MHz when an Apps CPU is active. */
+	/* Vote for CFPB to be on when Apps is active. */
 	if (WARN(IS_ERR(cfpb_a_clk), "cfpb_a_clk not found (%ld)\n",
 			PTR_ERR(cfpb_a_clk)))
 		return PTR_ERR(cfpb_a_clk);
-	rc = clk_set_rate(cfpb_a_clk, 64000000);
+	rc = clk_set_rate(cfpb_a_clk, 32000000);
 	if (WARN(rc, "cfpb_a_clk rate was not set (%d)\n", rc))
 		return rc;
 	rc = clk_prepare_enable(cfpb_a_clk);
@@ -6654,7 +6860,15 @@ struct clock_init_data apq8064_clock_init_data __initdata = {
 struct clock_init_data msm8930_clock_init_data __initdata = {
 	.table = msm_clocks_8930,
 	.size = ARRAY_SIZE(msm_clocks_8930),
-	.pre_init = msm8960_clock_pre_init,
+	.pre_init = msm8930_clock_pre_init,
+	.post_init = msm8960_clock_post_init,
+	.late_init = msm8960_clock_late_init,
+};
+
+struct clock_init_data msm8930_pm8917_clock_init_data __initdata = {
+	.table = msm_clocks_8930,
+	.size = ARRAY_SIZE(msm_clocks_8930),
+	.pre_init = msm8930_pm8917_clock_pre_init,
 	.post_init = msm8960_clock_post_init,
 	.late_init = msm8960_clock_late_init,
 };
