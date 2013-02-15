@@ -146,6 +146,6 @@ struct pll_config_regs {
 	void *const __iomem *base;
 };
 
-void __init configure_pll(struct pll_config *, struct pll_config_regs *, u32);
-
+void configure_sr_pll(struct pll_config *config, struct pll_config_regs *regs,
+				u32 ena_fsm_mode);
 #endif
